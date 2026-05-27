@@ -8,6 +8,7 @@
 import streamlit as st
 import pandas as pd
 import pickle
+import os
 
 # ==========================================
 # PAGE CONFIG
@@ -276,8 +277,8 @@ elif page == "Customer Churn Prediction":
             ]
         )
 
-   # ==========================================
-    # CREATE INPUT DATAFRAME (FIXED COLUMN ORDER)
+    # ==========================================
+    # CREATE INPUT DATAFRAME
     # ==========================================
 
     input_data = pd.DataFrame({
@@ -291,7 +292,7 @@ elif page == "Customer Churn Prediction":
         'Wishlist_Items': [Wishlist_Items],
         'Total_Purchases': [Total_Purchases],
         'Average_Order_Value': [Average_Order_Value],
-        'Lifetime_Value': [Lifetime_Value],              # Moved up to match model training order
+        'Lifetime_Value': [Lifetime_Value],
         'Days_Since_Last_Purchase': [Days_Since_Last_Purchase],
         'Discount_Usage_Rate': [Discount_Usage_Rate],
         'Returns_Rate': [Returns_Rate],
@@ -301,32 +302,33 @@ elif page == "Customer Churn Prediction":
         'Social_Media_Engagement_Score': [Social_Media_Engagement_Score],
         'Mobile_App_Usage': [Mobile_App_Usage],
         'Payment_Method_Diversity': [Payment_Method_Diversity],
-        'Credit_Balance': [Credit_Balance],              # Moved up to match model training order
+        'Credit_Balance': [Credit_Balance],
         'Country': [Country],
-        'Signup_Quarter': [Signup_Quarter]                # Moved up to match model training order
+        'Signup_Quarter': [Signup_Quarter]
     })
 
     # ==========================================
     # PREDICT BUTTON
     # ==========================================
-# ==========================================
-    # PREDICT BUTTON (AUTO-ALIGN COLUMNS)
-    # ==========================================
 
     if st.button("Predict Churn"):
 
         try:
-            # Look inside the model to find out exactly what columns it wants
+
             if hasattr(pipeline, "feature_names_in_"):
+
                 expected_features = pipeline.feature_names_in_
-                
-                # Check if any expected features are missing from your UI variables
+
                 missing_from_df = set(expected_features) - set(input_data.columns)
+
                 if missing_from_df:
-                    st.error(f"UI Error: The model expects these features which aren't in your DataFrame: {missing_from_df}")
+
+                    st.error(
+                        f"UI Error: Missing Features: {missing_from_df}"
+                    )
+
                     st.stop()
-                
-                # Automatically reorder and fix the dataframe columns
+
                 input_data = input_data[expected_features]
 
             # ==========================
@@ -338,6 +340,58 @@ elif page == "Customer Churn Prediction":
             probability = pipeline.predict_proba(input_data)
 
             churn_probability = probability[0][1] * 100
+
+            # ==========================
+            # STORE PREDICTION RESULTS
+            # ==========================
+
+            prediction_value = int(prediction[0])
+
+            result_data = input_data.copy()
+
+            result_data["Prediction"] = prediction_value
+
+            result_data["Prediction_Label"] = (
+                "Customer Likely To Churn"
+                if prediction_value == 1
+                else "Customer Will Stay"
+            )
+
+            result_data["Churn_Probability"] = round(
+                churn_probability,
+                2
+            )
+
+            result_data["Prediction_Time"] = pd.Timestamp.now()
+
+            csv_file = "customer_predictions.csv"
+
+            # ==========================
+            # APPEND CSV
+            # ==========================
+
+            if os.path.exists(csv_file):
+
+                existing_data = pd.read_csv(csv_file)
+
+                updated_data = pd.concat(
+                    [existing_data, result_data],
+                    ignore_index=True
+                )
+
+            else:
+
+                updated_data = result_data
+
+            # ==========================
+            # SAVE CSV
+            # ==========================
+
+            updated_data.to_csv(
+                csv_file,
+                index=False
+            )
+
             # ==========================
             # SHOW PROBABILITY
             # ==========================
@@ -473,4 +527,4 @@ st.write("---")
 
 st.write(
     "Developed Using Streamlit + Machine Learning"
-)
+) 
